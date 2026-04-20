@@ -219,6 +219,7 @@
     const res = await fetch(url, opts);
     if (res.status === 204) return null;
     const data = await res.json();
+    if (res.status === 401) { logout(); return null; }
     if (!res.ok) throw new Error(data.error_description || data.message || data.msg || res.statusText);
     return data;
   }
@@ -420,11 +421,18 @@
   }
 
   /* ── restore session on load ── */
-  (function init() {
+  (async function init() {
     const raw = localStorage.getItem('sb_session');
     if (!raw) return;
     try {
-      session = JSON.parse(raw);
+      const s = JSON.parse(raw);
+      if (!s || !s.access_token || !s.user) { localStorage.removeItem('sb_session'); return; }
+      // verify token is still valid
+      const res = await fetch(`${BASE}/auth/v1/user`, {
+        headers: { 'apikey': KEY, 'Authorization': `Bearer ${s.access_token}` }
+      });
+      if (!res.ok) { localStorage.removeItem('sb_session'); return; }
+      session = s;
       startApp(session.user.email);
     } catch(_) {
       localStorage.removeItem('sb_session');
